@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>去除行首符号</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    background: #f5f6f8; color: #222;
+  }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    background: #fff; padding: 12px 16px; border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px;
+  }
+  .toolbar label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  #prefix {
+    width: 80px; padding: 4px 8px; font-family: Menlo, monospace; font-size: 14px;
+    border: 1px solid #ccc; border-radius: 4px;
+  }
+  button {
+    padding: 5px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eef2ff; border-color: #6b7cff; }
+  button.primary { background: #4f63ff; color: #fff; border-color: #4f63ff; }
+  button.primary:hover { background: #3c4fe6; }
+  .quick button { font-family: Menlo, monospace; padding: 4px 10px; }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pane { display: flex; flex-direction: column; }
+  .pane-title { font-size: 13px; color: #666; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  textarea {
+    width: 100%; height: calc(100vh - 190px); min-height: 300px;
+    padding: 12px; font-family: Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5;
+    border: 1px solid #ddd; border-radius: 8px; resize: vertical; tab-size: 4; white-space: pre;
+  }
+  #output { background: #fbfbfd; }
+  #toast { color: #1a9a4b; font-size: 13px; opacity: 0; transition: opacity .2s; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 800px) { .panes { grid-template-columns: 1fr; } textarea { height: 40vh; } }
+</style>
+</head>
+<body>
+<h1>去除每行开头的指定符号</h1>
+
+<div class="toolbar">
+  <label>要去掉的前缀 <input id="prefix" value="+"></label>
+  <span class="quick">
+    <button data-p="+">+</button>
+    <button data-p="-">-</button>
+    <button data-p=">">&gt;</button>
+    <button data-p="#">#</button>
+  </span>
+  <label><input type="checkbox" id="stripSpace"> 同时去掉前缀后的一个空格</label>
+  <label><input type="checkbox" id="dedent" checked> 去除公共缩进</label>
+  <button class="primary" id="copy">复制结果</button>
+  <button id="clear">清空</button>
+  <span id="toast">已复制 ✓</span>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-title"><span>输入</span></div>
+    <textarea id="input" placeholder="在这里粘贴文本…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-title"><span>结果</span><span id="stat"></span></div>
+    <textarea id="output" readonly spellcheck="false"></textarea>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const input = $('input'), output = $('output'), prefixEl = $('prefix');
+
+  function process(text, prefix, opts) {
+    let changed = 0;
+    let lines = text.split(/\r?\n/).map((line) => {
+      if (prefix && line.startsWith(prefix)) {
+        changed++;
+        line = line.slice(prefix.length);
+        if (opts.stripSpace && line.startsWith(' ')) line = line.slice(1);
+      }
+      return line;
+    });
+
+    if (opts.dedent) {
+      const indents = lines
+        .filter((l) => l.trim() !== '')
+        .map((l) => l.match(/^[ \t]*/)[0].length);
+      const min = indents.length ? Math.min(...indents) : 0;
+      if (min > 0) lines = lines.map((l) => l.slice(Math.min(min, l.match(/^[ \t]*/)[0].length)));
+    }
+
+    return { text: lines.join('\n'), changed };
+  }
+
+  function update() {
+    const { text, changed } = process(input.value, prefixEl.value, {
+      stripSpace: $('stripSpace').checked,
+      dedent: $('dedent').checked,
+    });
+    output.value = text;
+    $('stat').textContent = input.value ? `处理了 ${changed} 行` : '';
+  }
+
+  [input, prefixEl].forEach((el) => el.addEventListener('input', update));
+  ['stripSpace', 'dedent'].forEach((id) => $(id).addEventListener('change', update));
+
+  document.querySelectorAll('.quick button').forEach((btn) =>
+    btn.addEventListener('click', () => { prefixEl.value = btn.dataset.p; update(); })
+  );
+
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(output.value);
+    } catch {
+      output.select();
+      document.execCommand('copy');
+    }
+    const toast = $('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+
+  $('clear').addEventListener('click', () => { input.value = ''; update(); input.focus(); });
+
+  input.focus();
+</script>
+</body>
+</html>
